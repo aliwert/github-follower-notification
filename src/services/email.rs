@@ -2,7 +2,6 @@ use anyhow::{Result, Context};
 use lettre::{
     message::Message,
     transport::smtp::authentication::Credentials,
-    transport::smtp::client::SmtpClient,
     SmtpTransport,
     Transport,
 };

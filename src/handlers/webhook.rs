@@ -1,46 +1,37 @@
-use create::{
-    models::FollowerEvent,
-    services::NotificationManager,
-};
 use axum::{
     extract::State,
     http::{HeaderMap, StatusCode},
+    response::IntoResponse,
     Json,
 };
 use std::sync::Arc;
+use tracing::{error, info, warn};
 use notify_rust::Notification;
-use tracing::{info, error, warn};
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
-use hex;
+
+use crate::{
+    models::FollowerEvent,
+    services::NotificationManager,
+};
+use super::HandlerError;
 
 pub async fn handle_webhook(
     State(manager): State<Arc<NotificationManager>>,
     headers: HeaderMap,
     body: String,
     Json(event): Json<FollowerEvent>,
-) -> StatusCode {
+) -> Result<impl IntoResponse, HandlerError> {
     // Verify GitHub signature
-    let signature = match headers.get("X-Hub-Signature-256") {
-        Some(sig) => sig.to_str().unwrap_or("").trim_start_matches("sha256="),
-        None => {
-            error!("Missing signature header");
-            return StatusCode::UNAUTHORIZED;
-        }
-    };
+    let signature = headers
+        .get("X-Hub-Signature-256")
+        .and_then(|sig| sig.to_str().ok())
+        .map(|sig| sig.trim_start_matches("sha256="))
+        .ok_or_else(|| HandlerError::AuthenticationError("Missing signature header".into()))?;
 
     // Verify webhook signature
-    match verify_signature(&headers, body.as_bytes(), &manager.webhook_secret) {
-        Ok(true) => (),
-        Ok(false) => {
-            error!("Invalid signature");
-            return StatusCode::UNAUTHORIZED;
-        }
-        Err(e) => {
-            error!("Signature verification error: {}", e);
-            return StatusCode::INTERNAL_SERVER_ERROR;
-        }
-    }
+    verify_signature(&body, signature, &manager.webhook_secret)
+        .map_err(|e| HandlerError::AuthenticationError(format!("Invalid signature: {}", e)))?;
 
     // Process the event
     match event.action.as_str() {
@@ -55,39 +46,34 @@ pub async fn handle_webhook(
             );
 
             // Send notifications
-            if let Err(e) = manager.notify_all(&title, &message).await {
-                error!("Failed to send notifications: {}", e);
-                return StatusCode::INTERNAL_SERVER_ERROR;
-            }
+            manager.notify_all(&title, &message)
+                .await
+                .map_err(|e| HandlerError::NotificationError(e.to_string()))?;
 
             // Show desktop notification
             if let Err(e) = Notification::new()
                 .summary(title)
                 .body(&message)
                 .icon("github")
-                .show() {
+                .show() 
+            {
                 warn!("Failed to show desktop notification: {}", e);
             }
 
-            StatusCode::OK
+            Ok(StatusCode::OK)
         }
         _ => {
             warn!("Unsupported event action: {}", event.action);
-            StatusCode::BAD_REQUEST
+            Err(HandlerError::ValidationError("Unsupported event action".into()))
         }
     }
 }
 
-fn verify_signature(headers: &HeaderMap, body: &[u8], secret: &str) -> anyhow::Result<bool> {
-    let signature = match headers.get("X-Hub-Signature-256") {
-        Some(sig) => sig.to_str()?.trim_start_matches("sha256="),
-        None => return Ok(false),
-    };
-
+fn verify_signature(payload: &str, signature: &str, secret: &str) -> anyhow::Result<()> {
     let mut mac = Hmac::<Sha256>::new_from_slice(secret.as_bytes())?;
-    mac.update(body);
-    let result = mac.finalize().into_bytes();
-    let expected = hex::decode(signature)?;
-
-    Ok(result.as_slice() == expected.as_slice())
+    mac.update(payload.as_bytes());
+    
+    let decoded_signature = hex::decode(signature)?;
+    mac.verify_slice(&decoded_signature)
+        .map_err(|_| anyhow::anyhow!("Invalid signature"))
 }

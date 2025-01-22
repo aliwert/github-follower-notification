@@ -7,6 +7,7 @@ edition = "2021"
 axum = { version = "0.6", features = ["headers"] }
 tokio = { version = "1.0", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }
+digest = { version = "0.10", features = ["oid"] }
 serde_json = "1.0"
 reqwest = { version = "0.11", features = ["json"] }
 notify-rust = "4"
@@ -17,12 +18,19 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 hmac = "0.12"
 sha2 = "0.10"
+create = "0.1"
 hex = "0.4"
 governor = "0.5"
-lettre = { version = "0.10", features = ["rustls-tls", "tokio1", "tokio1-rustls-tls"] }
+lettre = { version = "0.10", default-features = false, features = [
+    "tokio1",
+    "rustls-tls",
+    "tokio1-rustls-tls",
+    "smtp-transport",
+    "builder"
+]}
 sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "sqlite"] }
 tower = { version = "0.4", features = ["limit"] }
-tower-http = { version = "0.4", features = ["trace", "cors"] }
+tower-http = { version = "0.4", features = ["trace"] }
 
 [dev-dependencies]
 tokio-test = "0.4"
