@@ -1,15 +1,8 @@
 use anyhow::Result;
-use axum::{
-    routing::post,
-    Router,
-};
+use axum::{routing::post, Router};
 use dotenv::dotenv;
-use github_notification_service::{
-    Config,
-    NotificationManager,
-    handlers::webhook::handle_webhook,
-};
-use std::{sync::Arc, net::SocketAddr};
+use github_notification_service::{handlers::webhook::handle_webhook, Config, NotificationManager};
+use std::{net::SocketAddr, sync::Arc};
 use tower_http::trace::TraceLayer;
 use tracing::info;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};

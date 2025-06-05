@@ -1,11 +1,8 @@
-use anyhow::{Result, Context};
+use anyhow::Result;
 use lettre::{
-    message::Message,
-    transport::smtp::authentication::Credentials,
-    SmtpTransport,
-    Transport,
+    message::Message, transport::smtp::authentication::Credentials, SmtpTransport, Transport,
 };
-use tracing::{info, error};
+use tracing::{error, info};
 
 pub struct EmailService {
     mailer: SmtpTransport,
@@ -22,7 +19,7 @@ impl EmailService {
         to_email: String,
     ) -> Result<Self> {
         let creds = Credentials::new(smtp_username, smtp_password);
-        
+
         let mailer = SmtpTransport::relay(&smtp_server)?
             .credentials(creds)
             .build();
